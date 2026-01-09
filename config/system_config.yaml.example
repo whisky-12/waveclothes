@@ -1,0 +1,70 @@
+# 系统配置文件
+# 注意：此文件包含敏感信息，请勿提交到版本控制系统
+
+# 腾讯云配置
+cloud:
+  tencent:
+    cos:
+      # 访问凭证
+      secret_id: ""
+      secret_key: ""
+      
+      # 存储配置
+      region: "ap-guangzhou"
+      bucket: "crush-temp-1384444369"
+      
+      # 域名配置
+      domain: "https://crush-temp-1384444369.cos.ap-guangzhou.myqcloud.com"
+      
+      # 上传文件夹
+      upload_folder: "temp"
+
+# 文件上传配置
+upload:
+  # 允许的文件类型
+  allowed_extensions: ["jpg", "jpeg", "png", "gif", "bmp", "webp", "pdf", "doc", "docx"]
+  
+  # 文件大小限制（字节）
+  max_file_size: 10485760  # 10MB
+  
+  # 图片处理配置
+  image_processing:
+    # 是否自动压缩
+    auto_compress: true
+    # 压缩质量（1-100）
+    quality: 85
+    # 最大宽度/高度
+    max_width: 4096
+    max_height: 4096
+    
+  # 文件命名规则
+  naming:
+    # 使用时间戳
+    use_timestamp: true
+    # 使用UUID
+    use_uuid: true
+    # 文件名前缀
+    prefix: "upload"
+
+# API配置
+api:
+  # 接口版本
+  version: "v1"
+  # 接口前缀
+  prefix: "/api/core"
+  
+# 安全配置
+security:
+  # 文件类型检查
+  validate_file_type: true
+  # 速率限制
+  rate_limit:
+    enabled: true
+    max_requests_per_minute: 60
+
+# 日志配置
+logging:
+  # 是否记录上传日志
+  log_uploads: true
+  # 日志级别
+  level: "INFO"
