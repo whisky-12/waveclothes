@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>兔兔猫个人学习笔记-AI 摄像馆 - 3D特效展示</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="/static/style.css" rel="stylesheet">
+</head>
+<body>
+    <!-- 3D背景粒子 -->
+    <div class="bg-particles">
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+    </div>
+
+    <!-- 主容器 -->
+    <div class="studio-container">
+        <!-- 头部标题 -->
+        <header class="studio-header">
+            <div class="header-content">
+                <div class="logo-section">
+                    <div class="logo-icon">
+                        <span class="logo-symbol">✨</span>
+                    </div>
+                    <div class="title-section">
+                        <h1 class="studio-title">AI 摄像馆</h1>
+                        <p class="studio-subtitle">智能特效摄影平台</p>
+                    </div>
+                </div>
+                <div class="header-status">
+                    <div class="online-indicator">
+                        <span class="dot"></span>
+                        <span>在线</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- 3D特效轮播区 -->
+        <section class="carousel-section" id="carouselSection">
+            <div class="carousel-container">
+                <!-- 3D轮播舞台 -->
+                <div class="carousel-stage" id="carouselStage">
+                    <!-- 特效卡片将通过JS动态生成 -->
+                </div>
+
+                <!-- 中心聚光灯 -->
+                <div class="spotlight-center"></div>
+
+                <!-- 旋转控制环 -->
+                <div class="control-ring">
+                    <div class="ring-glow"></div>
+                    <div class="ring-inner"></div>
+                </div>
+            </div>
+
+            <!-- 指示器 -->
+            <div class="indicators" id="indicators">
+                <!-- 动态生成 -->
+            </div>
+        </section>
+
+        <!-- 特效详情面板 -->
+        <section class="detail-panel" id="detailPanel">
+            <div class="detail-content">
+                <div class="detail-header">
+                    <h2 class="detail-title" id="detailTitle">新年烟花</h2>
+                    <div class="detail-badge" id="detailBadge">热门</div>
+                </div>
+                <p class="detail-description" id="detailDescription">专业灯光背景拍摄，打造完美人像效果</p>
+                
+                <div class="detail-features">
+                    <div class="feature-item">
+                        <span class="feature-icon">⚡</span>
+                        <span class="feature-text">快速生成</span>
+                    </div>
+                    <div class="feature-item">
+                        <span class="feature-icon">🎯</span>
+                        <span class="feature-text">智能人脸检测</span>
+                    </div>
+                    <div class="feature-item">
+                        <span class="feature-icon">✨</span>
+                        <span class="feature-text">专业级特效</span>
+                    </div>
+                </div>
+
+                <div class="detail-actions">
+                    <button class="btn-start-camera" id="startCameraBtn">
+                        <span class="btn-icon">📸</span>
+                        <span class="btn-text">开始拍摄</span>
+                    </button>
+                    <button class="btn-learn-more" id="learnMoreBtn">了解更多</button>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- 品牌标识 -->
+    <!-- <div class="brand-mark">
+        <span class="brand-text">Powered by PaddlePaddle and 文心5.0</span>
+    </div> -->
+
+    <!-- 加载动画 -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loader-3d">
+            <div class="cube-face cube-front"></div>
+            <div class="cube-face cube-back"></div>
+            <div class="cube-face cube-right"></div>
+            <div class="cube-face cube-left"></div>
+            <div class="cube-face cube-top"></div>
+            <div class="cube-face cube-bottom"></div>
+        </div>
+    </div>
+
+    <!-- 备案信息 -->
+    <div class="icp-info">
+        <div class="icp-code">网站启动码：qSyErSAC</div>
+        <div class="icp-notice">兔兔猫个人学习记录 · 非商业用途 · 学习项目demo展示</div>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>

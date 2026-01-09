@@ -1,0 +1,1331 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AI 光影裂变 - 拍照交互 Demo</title>
+    <style>
+        :root {
+            --neon-cyan: #00F2FF;
+            --neon-purple: #7000FF;
+            --dark-bg: #050505;
+            --hud-border-color: rgba(0, 242, 255, 0.5);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', 'Roboto Mono', monospace;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--dark-bg);
+            color: white;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            /* 微弱的背景噪点纹理 */
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.05'/%3E%3C/svg%3E");
+        }
+
+        /* --- 顶部导航栏 --- */
+        .top-bar {
+            height: 60px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 20px;
+            z-index: 10;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            font-size: 12px;
+            color: var(--neon-cyan);
+            letter-spacing: 1px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background-color: var(--neon-cyan);
+            border-radius: 50%;
+            margin-right: 8px;
+            box-shadow: 0 0 8px var(--neon-cyan);
+            animation: pulse-dot 2s infinite;
+        }
+
+        .close-btn {
+            font-size: 24px;
+            color: rgba(255,255,255,0.6);
+            cursor: pointer;
+        }
+
+        /* --- 核心取景器区域 (HUD) --- */
+        .viewfinder-container {
+            flex: 1;
+            position: relative;
+            margin: 10px 20px;
+            border-radius: 12px;
+            overflow: hidden;
+            /* 科技感边框辉光 */
+            box-shadow: 0 0 20px rgba(0, 242, 255, 0.1);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        /* 摄像头视频流 */
+        #camera-feed {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            transform-origin: center center;
+            transition: transform 0.2s ease-out;
+            /* 确保视频不被裁剪 */
+            display: block;
+        }
+
+        /* 比例指示器 */
+        .aspect-ratio-indicator {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: rgba(0, 0, 0, 0.75);
+            padding: 8px 14px;
+            border-radius: 8px;
+            color: white;
+            font-size: 13px;
+            font-weight: 600;
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            z-index: 5;
+            letter-spacing: 0.5px;
+        }
+
+        /* 缩放指示器 */
+        .zoom-indicator {
+            position: absolute;
+            bottom: 16px;
+            left: 16px;
+            background: rgba(0, 0, 0, 0.75);
+            padding: 8px 14px;
+            border-radius: 8px;
+            color: var(--neon-cyan);
+            font-size: 13px;
+            font-weight: 600;
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(0, 242, 255, 0.3);
+            z-index: 5;
+            letter-spacing: 0.5px;
+        }
+
+        /* 拍摄区域框 */
+        .capture-frame {
+            position: absolute;
+            border: 2px solid rgba(0, 242, 255, 0.6);
+            box-shadow: 0 0 20px rgba(0, 242, 255, 0.15), inset 0 0 30px rgba(0, 0, 0, 0.1);
+            pointer-events: none;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 5;
+        }
+
+        /* 拍摄区域框角落装饰 */
+        .capture-frame::before,
+        .capture-frame::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--neon-cyan);
+            opacity: 0.8;
+        }
+
+        .capture-frame::before {
+            top: 0;
+            left: 0;
+            border-right: none;
+            border-bottom: none;
+        }
+
+        .capture-frame::after {
+            bottom: 0;
+            right: 0;
+            border-left: none;
+            border-top: none;
+        }
+
+        /* HUD 覆盖层 */
+        .hud-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none; /* 让点击穿透 */
+        }
+
+        /* 扫描线动画 */
+        .scan-line {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(to right, transparent, var(--neon-cyan), transparent);
+            opacity: 0.5;
+            animation: scan-down 3s linear infinite;
+        }
+
+        /* HUD 角落括号装饰 */
+        .hud-corners::before, .hud-corners::after {
+            content: '';
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            border: 2px solid var(--hud-border-color);
+        }
+        
+        .hud-corners::before {
+            top: 10px; left: 10px;
+            border-right: none; border-bottom: none;
+            border-image: linear-gradient(to bottom right, var(--neon-cyan), transparent) 1;
+        }
+        .hud-corners::after {
+            bottom: 10px; right: 10px;
+            border-left: none; border-top: none;
+            border-image: linear-gradient(to top left, var(--neon-purple), transparent) 1;
+        }
+
+        /* --- 底部操作区 --- */
+        .bottom-dock {
+            height: 180px;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            padding-bottom: 30px;
+            background: linear-gradient(to top, rgba(0,0,0,0.9) 20%, transparent);
+            z-index: 10;
+        }
+
+        /* 快门按钮容器 */
+        .shutter-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex: 1;
+            position: relative;
+        }
+
+        /* 主快门按钮 */
+        .shutter-button {
+            width: 82px;
+            height: 82px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.15);
+            border: 4px solid rgba(255, 255, 255, 0.9);
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(10px);
+            box-shadow:
+                0 0 0 3px rgba(0, 242, 255, 0.1),
+                0 4px 20px rgba(0, 0, 0, 0.4),
+                inset 0 0 20px rgba(0, 242, 255, 0.05);
+        }
+
+        .shutter-button:hover {
+            transform: scale(1.03);
+            border-color: rgba(255, 255, 255, 1);
+            box-shadow:
+                0 0 0 4px rgba(0, 242, 255, 0.2),
+                0 6px 30px rgba(0, 0, 0, 0.5),
+                inset 0 0 20px rgba(0, 242, 255, 0.08);
+        }
+
+        .shutter-button:active {
+            transform: scale(0.92);
+            background: rgba(255, 255, 255, 0.35);
+            box-shadow:
+                0 0 0 2px rgba(0, 242, 255, 0.15),
+                0 2px 10px rgba(0, 0, 0, 0.3),
+                inset 0 0 30px rgba(0, 242, 255, 0.2);
+        }
+
+        /* 按钮内部的光晕和粒子（简化版） */
+        .shutter-inner-glow {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--neon-cyan), var(--neon-purple));
+            opacity: 0.5;
+            filter: blur(8px);
+            animation: pulse-glow 2s infinite alternate;
+        }
+
+        /* 快门按钮外圈装饰 */
+        .shutter-button::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 1px solid rgba(0, 242, 255, 0.3);
+            box-sizing: border-box;
+        }
+
+        /* 底部工具栏 */
+        .toolbar {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            padding: 0 24px 40px 24px;
+            padding-bottom: max(40px, env(safe-area-inset-bottom));
+        }
+
+        .toolbar-left {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            align-items: flex-start;
+        }
+
+        .toolbar-right {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            align-items: flex-end;
+        }
+
+        .tool-item {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            gap: 8px;
+            color: rgba(255, 255, 255, 0.85);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+            padding: 8px 12px;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+        }
+
+        .tool-item:hover {
+            background: rgba(0, 242, 255, 0.15);
+            border-color: rgba(0, 242, 255, 0.4);
+            color: white;
+        }
+
+        .tool-item:active {
+            transform: scale(0.95);
+        }
+
+        .tool-icon {
+            width: 20px;
+            height: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        /* 缩放控制组 */
+        .zoom-controls {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .zoom-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-size: 20px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            backdrop-filter: blur(5px);
+        }
+
+        .zoom-btn:hover {
+            background: rgba(0, 242, 255, 0.2);
+            border-color: var(--neon-cyan);
+            transform: scale(1.05);
+        }
+
+        .zoom-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* 比例选择弹窗 */
+        .ratio-popup {
+            position: absolute;
+            bottom: calc(100% + 8px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(5, 5, 5, 0.95);
+            border: 1px solid rgba(0, 242, 255, 0.3);
+            border-radius: 16px;
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(20px);
+            min-width: 140px;
+            z-index: 100;
+        }
+
+        .ratio-popup.active {
+            opacity: 1;
+            pointer-events: all;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        .ratio-option {
+            padding: 12px 16px;
+            background: transparent;
+            border: none;
+            border-radius: 12px;
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+            text-align: center;
+        }
+
+        .ratio-option:hover {
+            background: rgba(0, 242, 255, 0.15);
+            color: white;
+        }
+
+        .ratio-option.active {
+            background: rgba(0, 242, 255, 0.2);
+            color: var(--neon-cyan);
+            font-weight: 600;
+        }
+
+        /* --- 交互反馈覆盖层 --- */
+
+        /* 拍照闪光 */
+        .flash-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: white;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 100;
+            transition: opacity 0.1s ease-out;
+        }
+
+        /* 加载中状态 */
+        .processing-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(5,5,5,0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+        
+        .processing-overlay.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .loader-text {
+            margin-top: 20px;
+            color: var(--neon-cyan);
+            font-size: 14px;
+            letter-spacing: 2px;
+            animation: blink 1s infinite;
+        }
+
+        .tech-spinner {
+            width: 40px; height: 40px;
+            border: 3px solid transparent;
+            border-top-color: var(--neon-cyan);
+            border-right-color: var(--neon-purple);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        /* --- 结果展示区域 --- */
+        .result-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(5, 5, 5, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 200;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .result-overlay.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        /* 预览确认界面 */
+        .preview-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(5, 5, 5, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 150;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .preview-overlay.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .result-container {
+            max-width: 90%;
+            max-height: 80%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            animation: resultSlideUp 0.5s ease-out;
+        }
+
+        @keyframes resultSlideUp {
+            from {
+                opacity: 0;
+                transform: translateY(50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .result-image {
+            max-width: 100%;
+            max-height: 70vh;
+            border-radius: 12px;
+            box-shadow: 0 0 30px rgba(0, 242, 255, 0.3);
+            border: 2px solid var(--neon-cyan);
+        }
+
+        .result-title {
+            margin-top: 20px;
+            font-size: 18px;
+            color: white;
+            text-align: center;
+        }
+
+        .result-actions {
+            margin-top: 20px;
+            display: flex;
+            gap: 15px;
+        }
+
+        .result-btn {
+            padding: 12px 24px;
+            border: 1px solid var(--neon-cyan);
+            background: transparent;
+            color: var(--neon-cyan);
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+
+        .result-btn:hover {
+            background: var(--neon-cyan);
+            color: black;
+        }
+
+        .result-btn.primary {
+            background: var(--neon-cyan);
+            color: black;
+        }
+
+        .result-btn.primary:hover {
+            background: white;
+        }
+
+        /* --- 动画定义 --- */
+        @keyframes scan-down {
+            0% { top: 0%; opacity: 0.5; }
+            50% { opacity: 0.2; }
+            100% { top: 100%; opacity: 0.5; }
+        }
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; box-shadow: 0 0 8px var(--neon-cyan); }
+            50% { opacity: 0.5; box-shadow: 0 0 2px var(--neon-cyan); }
+        }
+        @keyframes pulse-glow {
+            0% { transform: scale(1); opacity: 0.6; }
+            100% { transform: scale(1.1); opacity: 0.8; }
+        }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        @keyframes blink { 50% { opacity: 0.5; } }
+
+        /* 特效模式特定样式（可扩展） */
+        body[data-effect="studio"] {
+            --neon-cyan: #00F2FF;
+            --neon-purple: #7000FF;
+        }
+
+        body[data-effect="quick"] {
+            --neon-cyan: #FFD700;
+            --neon-purple: #FF6B00;
+        }
+
+        body[data-effect="street"] {
+            --neon-cyan: #FF0055;
+            --neon-purple: #00FFFF;
+        }
+
+        body[data-effect="nature"] {
+            --neon-cyan: #00FF88;
+            --neon-purple: #00AAFF;
+        }
+
+        body[data-effect="vintage"] {
+            --neon-cyan: #CD853F;
+            --neon-purple: #8B4513;
+        }
+
+        body[data-effect="futuristic"] {
+            --neon-cyan: #FF00FF;
+            --neon-purple: #00FFFF;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="top-bar">
+        <div class="status-indicator">
+            <div class="status-dot"></div>
+            <span id="effect-display">AI NEURAL NET: ACTIVE</span>
+        </div>
+        <div class="close-btn">✕</div>
+    </div>
+
+    <div class="viewfinder-container">
+        <video id="camera-feed" autoplay playsinline muted></video>
+
+        <!-- 比例指示器 -->
+        <div class="aspect-ratio-indicator" id="aspect-ratio-indicator">9:16</div>
+
+        <!-- 缩放指示器 -->
+        <div class="zoom-indicator" id="zoom-indicator">1.0x</div>
+
+        <!-- 拍摄比例框 -->
+        <div class="capture-frame" id="capture-frame"></div>
+
+        <div class="hud-overlay">
+            <div class="scan-line"></div>
+            <div class="hud-corners"></div>
+        </div>
+
+        <div class="processing-overlay" id="processing-overlay">
+            <div class="tech-spinner"></div>
+            <div class="loader-text">AI 解析原子结构中...</div>
+        </div>
+    </div>
+
+    <div class="bottom-dock">
+        <!-- 工具栏 -->
+        <div class="toolbar">
+            <!-- 左侧工具：比例选择 -->
+            <div class="toolbar-left">
+                <div class="tool-item" id="ratio-btn">
+                    <div class="tool-icon">▱</div>
+                    <span>比例</span>
+                    <!-- 比例选择弹窗 -->
+                    <div class="ratio-popup" id="ratio-popup">
+                        <div class="ratio-option active" data-ratio="9:16" data-value="0.5625">9:16 竖屏</div>
+                        <div class="ratio-option" data-ratio="3:4" data-value="0.75">3:4 竖屏</div>
+                        <div class="ratio-option" data-ratio="1:1" data-value="1">1:1 方形</div>
+                        <div class="ratio-option" data-ratio="4:3" data-value="1.333">4:3 横屏</div>
+                        <div class="ratio-option" data-ratio="16:9" data-value="1.777">16:9 宽屏</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 中间：快门按钮 -->
+            <div class="shutter-container">
+                <div class="shutter-button" id="shutter-btn">
+                    <div class="shutter-inner-glow"></div>
+                </div>
+            </div>
+
+            <!-- 右侧工具：缩放控制 -->
+            <div class="toolbar-right">
+                <div class="zoom-controls">
+                    <button class="zoom-btn" id="zoom-out-btn">−</button>
+                    <button class="zoom-btn" id="zoom-in-btn">+</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="flash-overlay" id="flash"></div>
+
+    <!-- 预览确认覆盖层 -->
+    <div class="preview-overlay" id="preview-overlay">
+        <div class="result-container">
+            <img id="preview-image" class="result-image" src="" alt="拍摄预览">
+            <h3 class="result-title">确认使用这张照片？</h3>
+            <div class="result-actions">
+                <button class="result-btn" id="retake-photo-btn">重新拍摄</button>
+                <button class="result-btn primary" id="confirm-photo-btn">确认使用</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 结果展示覆盖层 -->
+    <div class="result-overlay" id="result-overlay">
+        <div class="result-container">
+            <img id="result-image" class="result-image" src="" alt="生成的图片">
+            <h3 class="result-title" id="result-title">图片生成完成</h3>
+            <div class="result-actions">
+                <button class="result-btn primary" id="retake-btn">重新拍摄</button>
+                <button class="result-btn" id="download-btn">下载图片</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 1. 启动摄像头
+        const videoElement = document.getElementById('camera-feed');
+
+        async function listDevices() {
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const videoDevices = devices.filter(device => device.kind === 'videoinput');
+                console.log('检测到的视频设备数量:', videoDevices.length);
+                videoDevices.forEach((device, index) => {
+                    console.log(`设备 ${index}:`, device.label || '未命名设备');
+                });
+                return videoDevices;
+            } catch (err) {
+                console.error('枚举设备失败:', err);
+                return [];
+            }
+        }
+
+        async function startCamera() {
+            try {
+                console.log('正在启动摄像头...');
+
+                // 先请求权限并枚举设备
+                const videoDevices = await listDevices();
+
+                if (videoDevices.length === 0) {
+                    throw new Error('未检测到摄像头设备');
+                }
+
+                console.log('找到', videoDevices.length, '个摄像头设备');
+
+                // 尝试请求摄像头权限
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: 'user', // 优先使用前置摄像头
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    },
+                    audio: false
+                });
+
+                console.log('摄像头权限已获取，视频流:', stream);
+                videoElement.srcObject = stream;
+
+                // 等待视频加载完成
+                videoElement.onloadedmetadata = () => {
+                    console.log('视频流已加载完成');
+                    videoElement.play();
+
+                    // 视频加载完成后更新比例框位置
+                    setTimeout(() => {
+                        updateCaptureFrame();
+                    }, 100);
+                };
+
+            } catch (err) {
+                console.error("摄像头启动失败:", err);
+
+                // 根据错误类型提供更具体的提示
+                let errorMsg = '无法访问摄像头。\n\n';
+                if (err.name === 'NotFoundError') {
+                    errorMsg += '错误: 未检测到摄像头设备\n\n';
+                    errorMsg += '可能的原因：\n';
+                    errorMsg += '1. 设备没有摄像头\n';
+                    errorMsg += '2. 摄像头被其他程序占用\n';
+                    errorMsg += '3. 摄像头驱动未正确安装\n';
+                } else if (err.name === 'NotAllowedError') {
+                    errorMsg += '错误: 摄像头访问被拒绝\n\n';
+                    errorMsg += '请在浏览器设置中允许访问摄像头，然后刷新页面。';
+                } else if (err.name === 'NotReadableError') {
+                    errorMsg += '错误: 无法读取摄像头\n\n';
+                    errorMsg += '可能的原因：\n';
+                    errorMsg += '1. 摄像头被其他应用占用\n';
+                    errorMsg += '2. 摄像头硬件故障\n';
+                } else {
+                    errorMsg += `错误类型: ${err.name}\n`;
+                    errorMsg += `错误信息: ${err.message}\n\n`;
+                    errorMsg += '请确保：\n';
+                    errorMsg += '1. 设备有可用的摄像头\n';
+                    errorMsg += '2. 已授予浏览器摄像头权限\n';
+                    errorMsg += '3. 浏览器支持 getUserMedia API\n';
+                    errorMsg += '4. 使用 HTTPS 或 localhost 访问（浏览器安全限制）';
+                }
+
+                alert(errorMsg);
+
+                // 显示错误提示UI（可选）
+                showCameraError(err);
+            }
+        }
+
+        // 显示摄像头错误的辅助函数
+        function showCameraError(err) {
+            const processingOverlay = document.getElementById('processing-overlay');
+            if (processingOverlay) {
+                processingOverlay.classList.add('active');
+                processingOverlay.querySelector('.loader-text').textContent = '摄像头不可用';
+                processingOverlay.querySelector('.tech-spinner').style.display = 'none';
+            }
+        }
+
+        // 2. 从首页获取特效参数
+        let selectedEffect = null;
+        let currentStyleType = 'new_year_style'; // 默认使用新年风格
+
+        function loadEffectFromStorage() {
+            try {
+                const effectStr = localStorage.getItem('selectedEffect');
+                if (effectStr) {
+                    selectedEffect = JSON.parse(effectStr);
+                    console.log('从首页获取到的特效参数:', selectedEffect);
+
+                    // 更新顶部状态栏显示当前特效
+                    const effectDisplay = document.getElementById('effect-display');
+                    if (effectDisplay && selectedEffect.title) {
+                        effectDisplay.textContent = `特效模式: ${selectedEffect.title}`;
+                    }
+
+                    // 根据特效类型调整页面风格（可选）
+                    if (selectedEffect.id) {
+                        document.body.setAttribute('data-effect', selectedEffect.id);
+                    }
+
+                    // 使用首页传入的style_type
+                    if (selectedEffect.style_type) {
+                        currentStyleType = selectedEffect.style_type;
+                        console.log('使用特效类型:', currentStyleType);
+                    }
+
+                    // 返回特效对象，供后续接口调用使用
+                    return selectedEffect;
+                } else {
+                    console.warn('未找到特效参数，使用默认模式');
+                    return null;
+                }
+            } catch (e) {
+                console.error('读取特效参数失败:', e);
+                return null;
+            }
+        }
+
+        // 3. 页面加载时初始化
+        window.addEventListener('load', () => {
+            // 先获取特效参数
+            loadEffectFromStorage();
+            // 然后启动摄像头
+            startCamera();
+            // 初始化拍摄设置
+            initCaptureSettings();
+        });
+
+        // 监听窗口大小变化，重新计算比例框位置
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                updateCaptureFrame();
+            }, 100);
+        });
+
+        // 拍摄设置 - 比例和缩放
+        let aspectRatioIndicator, zoomIndicator, captureFrame, ratioBtn, ratioPopup, ratioOptions, zoomInBtn, zoomOutBtn;
+
+        let currentAspectRatio = '9:16';
+        let currentRatioValue = 0.5625; // 9:16
+        let currentZoom = 1.0;
+        const MIN_ZOOM = 1.0;
+        const MAX_ZOOM = 3.0;
+        const ZOOM_STEP = 0.2;
+
+        function initCaptureSettings() {
+            // 获取DOM元素
+            aspectRatioIndicator = document.getElementById('aspect-ratio-indicator');
+            zoomIndicator = document.getElementById('zoom-indicator');
+            captureFrame = document.getElementById('capture-frame');
+            ratioBtn = document.getElementById('ratio-btn');
+            ratioPopup = document.getElementById('ratio-popup');
+            ratioOptions = document.querySelectorAll('.ratio-option');
+            zoomInBtn = document.getElementById('zoom-in-btn');
+            zoomOutBtn = document.getElementById('zoom-out-btn');
+
+            // 设置默认比例框
+            updateCaptureFrame();
+            updateZoomDisplay();
+
+            console.log('DOM元素检查:', {
+                ratioBtn: ratioBtn,
+                ratioPopup: ratioPopup,
+                ratioOptions: ratioOptions
+            });
+
+            // 比例选择点击事件
+            ratioBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                console.log('点击比例按钮');
+                ratioPopup.classList.toggle('active');
+            });
+
+            // 点击外部关闭比例弹窗
+            document.addEventListener('click', (e) => {
+                if (!ratioBtn.contains(e.target)) {
+                    ratioPopup.classList.remove('active');
+                }
+            });
+
+            // 比例选项点击事件
+            ratioOptions.forEach(option => {
+                option.addEventListener('click', () => {
+                    console.log('点击比例选项:', option.dataset.ratio);
+                    ratioOptions.forEach(opt => opt.classList.remove('active'));
+                    option.classList.add('active');
+                    currentAspectRatio = option.dataset.ratio;
+                    currentRatioValue = parseFloat(option.dataset.value);
+                    aspectRatioIndicator.textContent = currentAspectRatio;
+                    updateCaptureFrame();
+                    ratioPopup.classList.remove('active');
+                    console.log('选择比例:', currentAspectRatio, '值:', currentRatioValue);
+                });
+            });
+
+            // 缩放按钮事件
+            zoomInBtn.addEventListener('click', () => {
+                if (currentZoom < MAX_ZOOM) {
+                    currentZoom = Math.min(currentZoom + ZOOM_STEP, MAX_ZOOM);
+                    updateZoomDisplay();
+                }
+            });
+
+            zoomOutBtn.addEventListener('click', () => {
+                if (currentZoom > MIN_ZOOM) {
+                    currentZoom = Math.max(currentZoom - ZOOM_STEP, MIN_ZOOM);
+                    updateZoomDisplay();
+                }
+            });
+
+            // 双击快门重置缩放
+            shutterBtn.addEventListener('dblclick', () => {
+                currentZoom = 1.0;
+                updateZoomDisplay();
+            });
+        }
+
+        function updateCaptureFrame() {
+            const container = document.querySelector('.viewfinder-container');
+            const containerWidth = container.offsetWidth;
+            const containerHeight = container.offsetHeight;
+            const video = document.getElementById('camera-feed');
+
+            // 计算视频的实际比例
+            const videoRatio = video.videoWidth / video.videoHeight;
+
+            // 计算视频在容器中的实际显示尺寸（因为使用 object-fit: contain）
+            const videoDisplayRatio = containerWidth / containerHeight;
+            let videoDisplayWidth, videoDisplayHeight;
+
+            if (videoRatio > videoDisplayRatio) {
+                // 视频更宽，以宽度为基准
+                videoDisplayWidth = containerWidth;
+                videoDisplayHeight = containerWidth / videoRatio;
+            } else {
+                // 视频更高，以高度为基准
+                videoDisplayHeight = containerHeight;
+                videoDisplayWidth = containerHeight * videoRatio;
+            }
+
+            // 计算比例框的尺寸：始终基于未缩放的原始视频显示区域
+            let frameWidth, frameHeight;
+
+            if (currentRatioValue >= 1) {
+                // 横屏或方形：以视频显示宽度为基准
+                frameWidth = videoDisplayWidth * 0.95;
+                frameHeight = frameWidth / currentRatioValue;
+            } else {
+                // 竖屏：以视频显示高度为基准
+                frameHeight = videoDisplayHeight * 0.95;
+                frameWidth = frameHeight * currentRatioValue;
+            }
+
+            // 确保比例框不超出视频边界
+            frameWidth = Math.min(frameWidth, videoDisplayWidth);
+            frameHeight = Math.min(frameHeight, videoDisplayHeight);
+
+            // 计算视频显示区域的起始位置（用于居中比例框）
+            const videoDisplayLeft = (containerWidth - videoDisplayWidth) / 2;
+            const videoDisplayTop = (containerHeight - videoDisplayHeight) / 2;
+
+            // 计算比例框在容器中的位置（始终居中于视频显示区域，不受缩放影响）
+            const frameLeft = videoDisplayLeft + (videoDisplayWidth - frameWidth) / 2;
+            const frameTop = videoDisplayTop + (videoDisplayHeight - frameHeight) / 2;
+
+            // 应用缩放到视频（缩放时保持画面完整）
+            video.style.transform = `scale(${currentZoom})`;
+
+            captureFrame.style.width = `${frameWidth}px`;
+            captureFrame.style.height = `${frameHeight}px`;
+            captureFrame.style.left = `${frameLeft}px`;
+            captureFrame.style.top = `${frameTop}px`;
+
+            console.log('比例框更新:', {
+                容器尺寸: `${containerWidth}x${containerHeight}`,
+                视频原始尺寸: `${video.videoWidth}x${video.videoHeight}`,
+                视频比例: videoRatio.toFixed(3),
+                视频显示尺寸: `${videoDisplayWidth.toFixed(0)}x${videoDisplayHeight.toFixed(0)}`,
+                框尺寸: `${frameWidth.toFixed(0)}x${frameHeight.toFixed(0)}`,
+                框位置: `(${frameLeft.toFixed(0)}, ${frameTop.toFixed(0)})`,
+                缩放倍数: currentZoom.toFixed(1)
+            });
+        }
+
+        function updateZoomDisplay() {
+            const video = document.getElementById('camera-feed');
+            zoomIndicator.textContent = `${currentZoom.toFixed(1)}x`;
+            // 缩放变化时也更新比例框
+            updateCaptureFrame();
+        }
+
+
+        // 4. 拍照交互逻辑
+        const shutterBtn = document.getElementById('shutter-btn');
+        const flashOverlay = document.getElementById('flash');
+        const processingOverlay = document.getElementById('processing-overlay');
+        const resultOverlay = document.getElementById('result-overlay');
+        const previewOverlay = document.getElementById('preview-overlay');
+        const resultImage = document.getElementById('result-image');
+        const previewImage = document.getElementById('preview-image');
+        const retakeBtn = document.getElementById('retake-btn');
+        const retakePhotoBtn = document.getElementById('retake-photo-btn');
+        const confirmPhotoBtn = document.getElementById('confirm-photo-btn');
+        const downloadBtn = document.getElementById('download-btn');
+        const loaderText = processingOverlay.querySelector('.loader-text');
+
+        // 保存拍摄后的图片Blob，用于后续上传
+        let capturedImageBlob = null;
+
+        async function captureAndProcess() {
+            try {
+                // A. 触发闪光特效
+                flashOverlay.style.opacity = '1';
+                setTimeout(() => {
+                    flashOverlay.style.opacity = '0';
+                }, 100);
+
+                // B. 震动反馈 (如果设备支持)
+                if (navigator.vibrate) {
+                    navigator.vibrate(50);
+                }
+
+                // C. 显示处理中状态
+                processingOverlay.classList.add('active');
+                loaderText.textContent = '正在拍摄...';
+
+                // D. 获取视频和比例框信息
+                const video = document.getElementById('camera-feed');
+                const container = document.querySelector('.viewfinder-container');
+                const frame = captureFrame;
+
+                // 获取比例框的实际尺寸和位置
+                const frameRect = frame.getBoundingClientRect();
+                const containerRect = container.getBoundingClientRect();
+
+                // 计算比例框在容器中的相对位置
+                const frameX = frameRect.left - containerRect.left;
+                const frameY = frameRect.top - containerRect.top;
+                const frameW = frameRect.width;
+                const frameH = frameRect.height;
+
+                // 计算视频在容器中的实际显示尺寸
+                const containerWidth = containerRect.width;
+                const containerHeight = containerRect.height;
+                const videoRatio = video.videoWidth / video.videoHeight;
+                const containerRatio = containerWidth / containerHeight;
+
+                let videoDisplayWidth, videoDisplayHeight;
+                if (videoRatio > containerRatio) {
+                    videoDisplayWidth = containerWidth;
+                    videoDisplayHeight = containerWidth / videoRatio;
+                } else {
+                    videoDisplayHeight = containerHeight;
+                    videoDisplayWidth = containerHeight * videoRatio;
+                }
+
+                // 计算视频在容器中的偏移量
+                const videoDisplayX = (containerWidth - videoDisplayWidth) / 2;
+                const videoDisplayY = (containerHeight - videoDisplayHeight) / 2;
+
+                // 计算比例框相对于视频显示区域的位置（转换为比例）
+                // 比例框基于未缩放的原始视频显示区域
+                const relativeX = (frameX - videoDisplayX) / videoDisplayWidth;
+                const relativeY = (frameY - videoDisplayY) / videoDisplayHeight;
+                const relativeW = frameW / videoDisplayWidth;
+                const relativeH = frameH / videoDisplayHeight;
+
+                // 映射到原始视频的像素坐标
+                const cropX = relativeX * video.videoWidth;
+                const cropY = relativeY * video.videoHeight;
+                const cropWidth = relativeW * video.videoWidth;
+                const cropHeight = relativeH * video.videoHeight;
+
+                // 创建最终的Canvas
+                const finalCanvas = document.createElement('canvas');
+                finalCanvas.width = cropWidth;
+                finalCanvas.height = cropHeight;
+                const finalCtx = finalCanvas.getContext('2d');
+
+                // 从原始视频中裁剪对应的区域
+                finalCtx.drawImage(
+                    video,
+                    cropX, cropY, cropWidth, cropHeight,
+                    0, 0, cropWidth, cropHeight
+                );
+
+                console.log('拍摄参数:', {
+                    容器尺寸: `${containerWidth}x${containerHeight}`,
+                    视频原始尺寸: `${video.videoWidth}x${video.videoHeight}`,
+                    视频显示尺寸: `${videoDisplayWidth.toFixed(0)}x${videoDisplayHeight.toFixed(0)}`,
+                    比例框尺寸: `${frameW.toFixed(0)}x${frameH.toFixed(0)}`,
+                    比例框位置: `(${frameX.toFixed(0)}, ${frameY.toFixed(0)})`,
+                    裁剪区域: `${cropX.toFixed(0)},${cropY.toFixed(0)},${cropWidth.toFixed(0)},${cropHeight.toFixed(0)}`,
+                    输出尺寸: `${cropWidth.toFixed(0)}x${cropHeight.toFixed(0)}`,
+                    比例: currentAspectRatio,
+                    缩放倍数: `${currentZoom}x`
+                });
+
+                // 转换为Blob
+                const finalBlob = await new Promise(resolve => {
+                    finalCanvas.toBlob(resolve, 'image/jpeg', 0.9);
+                });
+
+                console.log('生成的Blob信息:', {
+                    type: finalBlob.type,
+                    size: finalBlob.size
+                });
+
+                // 保存拍摄的图片Blob
+                capturedImageBlob = finalBlob;
+
+                // 将Blob转换为DataURL用于预览显示
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    previewImage.src = e.target.result;
+                };
+                reader.readAsDataURL(finalBlob);
+
+                // E. 显示预览界面，让用户确认
+                setTimeout(() => {
+                    processingOverlay.classList.remove('active');
+                    previewOverlay.classList.add('active');
+                }, 300);
+
+            } catch (error) {
+                console.error('拍摄失败:', error);
+                alert('拍摄失败: ' + error.message);
+                processingOverlay.classList.remove('active');
+            }
+        }
+
+        async function processWithServer() {
+            try {
+                // 如果没有保存的图片Blob，重新截取
+                if (!capturedImageBlob) {
+                    throw new Error('未找到拍摄的照片');
+                }
+
+                // 先隐藏预览界面，再显示处理中状态
+                previewOverlay.classList.remove('active');
+                processingOverlay.classList.add('active');
+                loaderText.textContent = '正在上传...';
+
+                // 创建FormData上传图片
+                const formData = new FormData();
+                const file = new File([capturedImageBlob], `capture-${Date.now()}.jpg`, {
+                    type: 'image/jpeg'
+                });
+                formData.append('file', file);
+
+                // 上传图片到服务器
+                const uploadResponse = await fetch('/api/upload/image', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!uploadResponse.ok) {
+                    throw new Error(`上传失败: ${uploadResponse.status}`);
+                }
+
+                const uploadResult = await uploadResponse.json();
+                console.log('上传结果:', uploadResult);
+
+                if (!uploadResult.success || !uploadResult.url) {
+                    throw new Error('上传失败：未返回图片URL');
+                }
+
+                const imageUrl = uploadResult.url;
+
+                // 调用后端API进行图像生成
+                loaderText.textContent = '正在生成特效...';
+                const taskData = {
+                    image_url: imageUrl,
+                    style_type: currentStyleType,
+                    user_id: 'anonymous'
+                };
+
+                console.log('发送特效任务到后端:', taskData);
+
+                const composeResponse = await fetch('/api/basic/compose', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(taskData)
+                });
+
+                if (!composeResponse.ok) {
+                    throw new Error(`特效生成失败: ${composeResponse.status}`);
+                }
+
+                const composeResult = await composeResponse.json();
+                console.log('后端返回结果:', composeResult);
+
+                // 显示结果图片
+                if (composeResult.success && composeResult.data) {
+                    // 支持image_urls（数组）格式
+                    if (composeResult.data.image_urls && composeResult.data.image_urls.length > 0) {
+                        resultImage.src = composeResult.data.image_urls[0];
+                    } else {
+                        throw new Error('返回数据格式错误：未找到图片URL');
+                    }
+
+                    // 更新标题显示特效名称
+                    const titleText = document.getElementById('result-title');
+                    if (titleText) {
+                        titleText.textContent = '图片生成完成';
+                    }
+
+                    // 隐藏预览，显示结果
+                    previewOverlay.classList.remove('active');
+                    processingOverlay.classList.remove('active');
+                    resultOverlay.classList.add('active');
+                } else {
+                    throw new Error('特效生成失败');
+                }
+
+            } catch (error) {
+                console.error('处理失败:', error);
+                alert('处理失败: ' + error.message);
+                processingOverlay.classList.remove('active');
+            }
+        }
+
+        shutterBtn.addEventListener('click', () => {
+            captureAndProcess();
+        });
+
+        // 预览界面 - 重新拍摄
+        retakePhotoBtn.addEventListener('click', () => {
+            previewOverlay.classList.remove('active');
+            capturedImageBlob = null; // 清除保存的图片
+        });
+
+        // 预览界面 - 确认使用，调用后端
+        confirmPhotoBtn.addEventListener('click', () => {
+            processWithServer();
+        });
+
+        // 结果界面 - 重新拍摄
+        retakeBtn.addEventListener('click', () => {
+            resultOverlay.classList.remove('active');
+            capturedImageBlob = null; // 清除保存的图片
+        });
+
+        // 下载图片
+        downloadBtn.addEventListener('click', () => {
+            const link = document.createElement('a');
+            link.href = resultImage.src;
+            link.download = `ai-photo-${Date.now()}.jpg`;
+            link.target = '_blank';
+            link.click();
+        });
+
+        // 6. 返回首页功能
+        document.querySelector('.close-btn').addEventListener('click', () => {
+            // 清除存储的特效参数
+            localStorage.removeItem('selectedEffect');
+            // 返回首页
+            window.location.href = '/';
+        });
+
+    </script>
+</body>
+</html>
