@@ -42,6 +42,12 @@ async def ai_camera_demo(request: Request):
     return templates.TemplateResponse("ai-camera-demo.html", {"request": request})
 
 
+@app.get("/ai-camera-living.html", response_class=HTMLResponse)
+async def ai_camera_living(request: Request):
+    """客厅自拍专用拍摄页面"""
+    return templates.TemplateResponse("ai-camera-living.html", {"request": request})
+
+
 @app.get("/health")
 async def health_check():
     """健康检查"""
@@ -260,24 +266,10 @@ async def submit_basic_compose(task_data: Dict[str, Any]):
         elif style_type == "selfie_living":
             # 风格6参数配置
             prompt = """
-            附图人物的全身自拍照，身处明亮的现代客厅。
-
-            人物一手持白色智能手机（对着自己自拍，但不要挡住脸），
-            背景包括：
-            - 浅灰色沙发
-            - 白色格纹抱枕
-            - 木质小边凳
-            - 绿植盆栽
-            - 挂有装饰画的墙面
-
-            光线为暖调自然光，人物姿势随性松弛，
-            整体呈现超写实质感。
-
-            注意：
-            - 不要改变人物的面部特征
-            - 不要改变人物的服装
+            保持图1人物五官不变，保持图1人物相似性，参考图2的姿势、服装、角度、景别、构图和光影。
+            不同姿势和表情，景别（近景，特写，中景，仰视等），俯视平视等镜头，生成4张图,2×2 网格布局。
             """
-            example_image_url = None
+            example_image_url = task_data.get("reference_image")
 
         # 使用服务工厂提交任务
         result = ServiceFactory.submit_basic_task(

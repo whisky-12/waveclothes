@@ -405,7 +405,15 @@ class Carousel3D {
 
         // 立即跳转到拍摄页面（不等待通知）
         console.log('✓ 立即跳转到拍摄页面...');
-        window.location.href = '/ai-camera-demo.html';
+        
+        // 根据特效ID判断跳转到哪个页面
+        if (effect.id === 'futuristic') {
+            // 客厅自拍特效跳转到专用页面
+            window.location.href = '/ai-camera-living.html';
+        } else {
+            // 其他特效跳转到通用拍摄页面
+            window.location.href = '/ai-camera-demo.html';
+        }
         console.log('✓ 跳转命令已执行');
     }
 
