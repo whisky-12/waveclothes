@@ -95,78 +95,21 @@
         #camera-feed {
             width: 100%;
             height: 100%;
-            object-fit: contain;
+            object-fit: cover;
             transform-origin: center center;
             transition: transform 0.2s ease-out;
             display: block;
         }
 
-        /* 比例指示器 */
-        .aspect-ratio-indicator {
+        /* 比例裁剪容器 - 实际上控制视频显示比例 */
+        .capture-frame-container {
             position: absolute;
-            top: 16px;
-            right: 16px;
-            background: rgba(0, 0, 0, 0.75);
-            padding: 8px 14px;
-            border-radius: 8px;
-            color: white;
-            font-size: 13px;
-            font-weight: 600;
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            z-index: 5;
-            letter-spacing: 0.5px;
-        }
-
-        /* 缩放指示器 */
-        .zoom-indicator {
-            position: absolute;
-            bottom: 16px;
-            left: 16px;
-            background: rgba(0, 0, 0, 0.75);
-            padding: 8px 14px;
-            border-radius: 8px;
-            color: var(--neon-cyan);
-            font-size: 13px;
-            font-weight: 600;
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(0, 242, 255, 0.3);
-            z-index: 5;
-            letter-spacing: 0.5px;
-        }
-
-        /* 拍摄区域框 */
-        .capture-frame {
-            position: absolute;
-            border: 2px solid rgba(0, 242, 255, 0.6);
-            box-shadow: 0 0 20px rgba(0, 242, 255, 0.15), inset 0 0 30px rgba(0, 0, 0, 0.1);
-            pointer-events: none;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            z-index: 5;
-        }
-
-        .capture-frame::before,
-        .capture-frame::after {
-            content: '';
-            position: absolute;
-            width: 20px;
-            height: 20px;
-            border: 2px solid var(--neon-cyan);
-            opacity: 0.8;
-        }
-
-        .capture-frame::before {
             top: 0;
             left: 0;
-            border-right: none;
-            border-bottom: none;
-        }
-
-        .capture-frame::after {
-            bottom: 0;
-            right: 0;
-            border-left: none;
-            border-top: none;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            overflow: hidden;
         }
 
         /* HUD 覆盖层 */
@@ -881,16 +824,16 @@
         <div class="split-container">
             <!-- 左侧：取景器区域 -->
             <div class="camera-section">
-                <video id="camera-feed" autoplay playsinline muted></video>
+                <!-- 比例裁剪容器 -->
+                <div class="capture-frame-container" id="capture-frame-container">
+                    <video id="camera-feed" autoplay playsinline muted></video>
+                </div>
 
                 <!-- 比例指示器 -->
                 <div class="aspect-ratio-indicator" id="aspect-ratio-indicator">9:16</div>
 
                 <!-- 缩放指示器 -->
                 <div class="zoom-indicator" id="zoom-indicator">1.0x</div>
-
-                <!-- 拍摄比例框 -->
-                <div class="capture-frame" id="capture-frame"></div>
 
                 <!-- 服装选择提示 -->
                 <div class="cloth-selection-hint" id="cloth-hint">请选择参考服装</div>
@@ -1220,56 +1163,49 @@
                 processingOverlay.classList.add('active');
                 loaderText.textContent = '正在拍摄...';
 
-                // 获取视频和比例框信息（与人物拍摄相同的逻辑）
                 const video = document.getElementById('camera-feed');
-                const container = document.querySelector('.camera-section');
-                const frame = captureFrame;
+                const frameContainer = document.getElementById('capture-frame-container');
 
-                const frameRect = frame.getBoundingClientRect();
-                const containerRect = container.getBoundingClientRect();
+                // 获取裁剪容器的实际显示尺寸（这是最终输出的尺寸）
+                const frameRect = frameContainer.getBoundingClientRect();
+                const outputWidth = frameRect.width;
+                const outputHeight = frameRect.height;
 
-                const frameX = frameRect.left - containerRect.left;
-                const frameY = frameRect.top - containerRect.top;
-                const frameW = frameRect.width;
-                const frameH = frameRect.height;
-
-                const containerWidth = containerRect.width;
-                const containerHeight = containerRect.height;
+                // 模拟 object-fit: cover 的行为
                 const videoRatio = video.videoWidth / video.videoHeight;
-                const containerRatio = containerWidth / containerHeight;
+                const containerRatio = outputWidth / outputHeight;
 
-                let videoDisplayWidth, videoDisplayHeight;
+                let sourceX, sourceY, sourceWidth, sourceHeight;
+
                 if (videoRatio > containerRatio) {
-                    videoDisplayWidth = containerWidth;
-                    videoDisplayHeight = containerWidth / videoRatio;
+                    sourceHeight = video.videoHeight;
+                    sourceWidth = sourceHeight * containerRatio;
+                    sourceX = (video.videoWidth - sourceWidth) / 2;
+                    sourceY = 0;
                 } else {
-                    videoDisplayHeight = containerHeight;
-                    videoDisplayWidth = containerHeight * videoRatio;
+                    sourceWidth = video.videoWidth;
+                    sourceHeight = sourceWidth / containerRatio;
+                    sourceX = 0;
+                    sourceY = (video.videoHeight - sourceHeight) / 2;
                 }
 
-                const videoDisplayX = (containerWidth - videoDisplayWidth) / 2;
-                const videoDisplayY = (containerHeight - videoDisplayHeight) / 2;
-
-                const relativeX = (frameX - videoDisplayX) / videoDisplayWidth;
-                const relativeY = (frameY - videoDisplayY) / videoDisplayHeight;
-                const relativeW = frameW / videoDisplayWidth;
-                const relativeH = frameH / videoDisplayHeight;
-
-                const cropX = relativeX * video.videoWidth;
-                const cropY = relativeY * video.videoHeight;
-                const cropWidth = relativeW * video.videoWidth;
-                const cropHeight = relativeH * video.videoHeight;
+                // 考虑zoom的影响
+                const zoomFactor = 1 / currentZoom;
+                const zoomedSourceX = sourceX + (sourceWidth * (1 - zoomFactor)) / 2;
+                const zoomedSourceY = sourceY + (sourceHeight * (1 - zoomFactor)) / 2;
+                const zoomedSourceWidth = sourceWidth * zoomFactor;
+                const zoomedSourceHeight = sourceHeight * zoomFactor;
 
                 // 创建最终Canvas并裁剪
                 const finalCanvas = document.createElement('canvas');
-                finalCanvas.width = cropWidth;
-                finalCanvas.height = cropHeight;
+                finalCanvas.width = outputWidth;
+                finalCanvas.height = outputHeight;
                 const finalCtx = finalCanvas.getContext('2d');
 
                 finalCtx.drawImage(
                     video,
-                    cropX, cropY, cropWidth, cropHeight,
-                    0, 0, cropWidth, cropHeight
+                    zoomedSourceX, zoomedSourceY, zoomedSourceWidth, zoomedSourceHeight,
+                    0, 0, outputWidth, outputHeight
                 );
 
                 // 转换为Blob
@@ -1372,7 +1308,7 @@
         }
 
         // 4. 拍摄设置
-        let aspectRatioIndicator, zoomIndicator, captureFrame, ratioBtn, ratioPopup, ratioOptions, zoomInBtn, zoomOutBtn;
+        let aspectRatioIndicator, zoomIndicator, captureFrameContainer, ratioBtn, ratioPopup, ratioOptions, zoomInBtn, zoomOutBtn;
         let currentAspectRatio = '9:16';
         let currentRatioValue = 0.5625;
         let currentZoom = 1.0;
@@ -1383,7 +1319,7 @@
         function initCaptureSettings() {
             aspectRatioIndicator = document.getElementById('aspect-ratio-indicator');
             zoomIndicator = document.getElementById('zoom-indicator');
-            captureFrame = document.getElementById('capture-frame');
+            captureFrameContainer = document.getElementById('capture-frame-container');
             ratioBtn = document.getElementById('ratio-btn');
             ratioPopup = document.getElementById('ratio-popup');
             ratioOptions = document.querySelectorAll('.ratio-option');
@@ -1440,51 +1376,44 @@
             const container = document.querySelector('.camera-section');
             const containerWidth = container.offsetWidth;
             const containerHeight = container.offsetHeight;
-            const video = document.getElementById('camera-feed');
 
-            const videoRatio = video.videoWidth / video.videoHeight;
-            const videoDisplayRatio = containerWidth / containerHeight;
-            let videoDisplayWidth, videoDisplayHeight;
-
-            if (videoRatio > videoDisplayRatio) {
-                videoDisplayWidth = containerWidth;
-                videoDisplayHeight = containerWidth / videoRatio;
-            } else {
-                videoDisplayHeight = containerHeight;
-                videoDisplayWidth = containerHeight * videoRatio;
-            }
-
+            // 按照选定比例计算裁剪容器的尺寸
             let frameWidth, frameHeight;
 
             if (currentRatioValue >= 1) {
-                frameWidth = videoDisplayWidth * 0.95;
+                // 横屏模式：宽度适应容器，高度按比例
+                frameWidth = containerWidth;
                 frameHeight = frameWidth / currentRatioValue;
             } else {
-                frameHeight = videoDisplayHeight * 0.95;
+                // 竖屏模式：高度适应容器，宽度按比例
+                frameHeight = containerHeight;
                 frameWidth = frameHeight * currentRatioValue;
             }
 
-            frameWidth = Math.min(frameWidth, videoDisplayWidth);
-            frameHeight = Math.min(frameHeight, videoDisplayHeight);
+            // 确保不超过容器边界
+            if (frameWidth > containerWidth) {
+                frameWidth = containerWidth;
+                frameHeight = frameWidth / currentRatioValue;
+            }
+            if (frameHeight > containerHeight) {
+                frameHeight = containerHeight;
+                frameWidth = frameHeight * currentRatioValue;
+            }
 
-            const videoDisplayLeft = (containerWidth - videoDisplayWidth) / 2;
-            const videoDisplayTop = (containerHeight - videoDisplayHeight) / 2;
+            // 居中定位裁剪容器
+            const frameLeft = (containerWidth - frameWidth) / 2;
+            const frameTop = (containerHeight - frameHeight) / 2;
 
-            const frameLeft = videoDisplayLeft + (videoDisplayWidth - frameWidth) / 2;
-            const frameTop = videoDisplayTop + (videoDisplayHeight - frameHeight) / 2;
-
-            video.style.transform = `scale(${currentZoom})`;
-
-            captureFrame.style.width = `${frameWidth}px`;
-            captureFrame.style.height = `${frameHeight}px`;
-            captureFrame.style.left = `${frameLeft}px`;
-            captureFrame.style.top = `${frameTop}px`;
+            captureFrameContainer.style.width = `${frameWidth}px`;
+            captureFrameContainer.style.height = `${frameHeight}px`;
+            captureFrameContainer.style.left = `${frameLeft}px`;
+            captureFrameContainer.style.top = `${frameTop}px`;
         }
 
         function updateZoomDisplay() {
             const video = document.getElementById('camera-feed');
             zoomIndicator.textContent = `${currentZoom.toFixed(1)}x`;
-            updateCaptureFrame();
+            video.style.transform = `scale(${currentZoom})`;
         }
 
         // 5. 拍照逻辑
@@ -1524,53 +1453,54 @@
                 loaderText.textContent = '正在拍摄...';
 
                 const video = document.getElementById('camera-feed');
-                const container = document.querySelector('.camera-section');
-                const frame = captureFrame;
+                const frameContainer = document.getElementById('capture-frame-container');
 
-                const frameRect = frame.getBoundingClientRect();
-                const containerRect = container.getBoundingClientRect();
+                // 获取裁剪容器的实际显示尺寸（这是最终输出的尺寸）
+                const frameRect = frameContainer.getBoundingClientRect();
+                const outputWidth = frameRect.width;
+                const outputHeight = frameRect.height;
 
-                const frameX = frameRect.left - containerRect.left;
-                const frameY = frameRect.top - containerRect.top;
-                const frameW = frameRect.width;
-                const frameH = frameRect.height;
-
-                const containerWidth = containerRect.width;
-                const containerHeight = containerRect.height;
+                // 模拟 object-fit: cover 的行为
+                // 视频缩放后填满容器，超出部分被裁剪
                 const videoRatio = video.videoWidth / video.videoHeight;
-                const containerRatio = containerWidth / containerHeight;
+                const containerRatio = outputWidth / outputHeight;
 
-                let videoDisplayWidth, videoDisplayHeight;
+                let sourceX, sourceY, sourceWidth, sourceHeight;
+
                 if (videoRatio > containerRatio) {
-                    videoDisplayWidth = containerWidth;
-                    videoDisplayHeight = containerWidth / videoRatio;
+                    // 视频更宽，需要裁剪左右两边
+                    // 高度填满容器，宽度超出
+                    sourceHeight = video.videoHeight;
+                    sourceWidth = sourceHeight * containerRatio;
+                    sourceX = (video.videoWidth - sourceWidth) / 2;
+                    sourceY = 0;
                 } else {
-                    videoDisplayHeight = containerHeight;
-                    videoDisplayWidth = containerHeight * videoRatio;
+                    // 视频更高，需要裁剪上下两边
+                    // 宽度填满容器，高度超出
+                    sourceWidth = video.videoWidth;
+                    sourceHeight = sourceWidth / containerRatio;
+                    sourceX = 0;
+                    sourceY = (video.videoHeight - sourceHeight) / 2;
                 }
 
-                const videoDisplayX = (containerWidth - videoDisplayWidth) / 2;
-                const videoDisplayY = (containerHeight - videoDisplayHeight) / 2;
+                // 考虑zoom的影响：zoom缩放的是视频的显示，相当于从源视频取更大的区域
+                // zoom越大，取的区域越小（因为视频看起来更大了）
+                const zoomFactor = 1 / currentZoom;
+                const zoomedSourceX = sourceX + (sourceWidth * (1 - zoomFactor)) / 2;
+                const zoomedSourceY = sourceY + (sourceHeight * (1 - zoomFactor)) / 2;
+                const zoomedSourceWidth = sourceWidth * zoomFactor;
+                const zoomedSourceHeight = sourceHeight * zoomFactor;
 
-                const relativeX = (frameX - videoDisplayX) / videoDisplayWidth;
-                const relativeY = (frameY - videoDisplayY) / videoDisplayHeight;
-                const relativeW = frameW / videoDisplayWidth;
-                const relativeH = frameH / videoDisplayHeight;
-
-                const cropX = relativeX * video.videoWidth;
-                const cropY = relativeY * video.videoHeight;
-                const cropWidth = relativeW * video.videoWidth;
-                const cropHeight = relativeH * video.videoHeight;
-
+                // 创建最终Canvas，输出尺寸就是容器尺寸
                 const finalCanvas = document.createElement('canvas');
-                finalCanvas.width = cropWidth;
-                finalCanvas.height = cropHeight;
+                finalCanvas.width = outputWidth;
+                finalCanvas.height = outputHeight;
                 const finalCtx = finalCanvas.getContext('2d');
 
                 finalCtx.drawImage(
                     video,
-                    cropX, cropY, cropWidth, cropHeight,
-                    0, 0, cropWidth, cropHeight
+                    zoomedSourceX, zoomedSourceY, zoomedSourceWidth, zoomedSourceHeight,
+                    0, 0, outputWidth, outputHeight
                 );
 
                 const finalBlob = await new Promise(resolve => {
