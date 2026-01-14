@@ -12,6 +12,7 @@ import time
 from typing import Dict, Any
 from services.service_factory import ServiceFactory
 from services.cos_service import cos_service
+from services.anonymize_faces import anonymize_faces_with_hair
 from config import Config
 
 
@@ -267,9 +268,25 @@ async def submit_basic_compose(task_data: Dict[str, Any]):
             # 风格6参数配置
             prompt = """
             保持图1人物五官不变，保持图1人物相似性，参考图2的姿势、服装、角度、景别、构图和光影。
-            不同姿势和表情，景别（近景，特写，中景，仰视等），俯视平视等镜头，生成4张图,2×2 网格布局。
+            不同姿势和表情，景别（近景，特写，中景，仰视等），俯视平视等镜头，生成1张图。
             """
-            example_image_url = task_data.get("reference_image")
+
+            # 获取参考图片URL
+            reference_image_url = task_data.get("reference_image")
+
+            # 强制进行面部和头发遮罩处理
+            if reference_image_url:
+                logger.info(f"开始对服装图片进行面部和头发遮罩处理: {reference_image_url}")
+                try:
+                    example_image_url = await anonymize_faces_with_hair(reference_image_url)
+                    logger.info(f"面部和头发遮罩处理完成，处理后的URL: {example_image_url}")
+                except Exception as e:
+                    logger.error(f"面部和头发遮罩处理失败: {e}", exc_info=True)
+                    # 如果处理失败，使用原始URL
+                    example_image_url = reference_image_url
+                    logger.warning("面部和头发遮罩处理失败，使用原始图片URL")
+            else:
+                example_image_url = None
 
         # 使用服务工厂提交任务
         result = ServiceFactory.submit_basic_task(

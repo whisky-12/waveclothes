@@ -21,13 +21,13 @@ logger = logging.getLogger(__name__)
 
 class COSService:
     """腾讯云COS上传服务"""
-    
+
     def __init__(self):
         """初始化COS服务"""
         self.cos_config = config_manager.get_cos_config()
         self.upload_config = config_manager.get_upload_config()
         self.client = self._init_client()
-    
+
     def _init_client(self) -> CosS3Client:
         """初始化COS客户端"""
         try:
@@ -35,7 +35,7 @@ class COSService:
             for field in required_fields:
                 if not self.cos_config.get(field):
                     raise ValueError(f"COS配置缺少必要字段: {field}")
-            
+
             config = CosConfig(
                 Region=self.cos_config['region'],
                 SecretId=self.cos_config['secret_id'],
@@ -45,30 +45,32 @@ class COSService:
         except Exception as e:
             logger.error(f"初始化COS客户端失败: {e}")
             raise
-    
+
     def generate_filename(self, original_filename: str) -> str:
         """生成新的文件名"""
         # 获取文件扩展名
         name, ext = os.path.splitext(original_filename)
         ext = ext.lower()
-        
+
         # 配置文件名生成规则
         naming_config = self.upload_config.get('naming', {})
         prefix = naming_config.get('prefix', 'upload')
-        
+
         parts = [prefix]
-        
+
         if naming_config.get('use_timestamp', True):
             parts.append(datetime.now().strftime("%Y%m%d_%H%M%S"))
-        
+
         if naming_config.get('use_uuid', True):
             parts.append(str(uuid.uuid4())[:8])
-        
-        parts.append(f"{name[:20]}")  # 保留原文件名前20个字符
-        
+
+        # 只取文件名部分，去除路径
+        base_name = os.path.basename(name)
+        parts.append(f"{base_name[:20]}")  # 保留原文件名前20个字符
+
         filename = "_".join(parts) + ext
         return filename
-    
+
     def validate_file(self, file) -> Dict[str, Any]:
         """验证文件"""
         result = {
@@ -149,7 +151,7 @@ class COSService:
             result['error'] = f"文件验证失败: {str(e)}"
 
         return result
-    
+
     def process_image(self, file, filename: str) -> bytes:
         """处理图片（压缩等）"""
         # 获取底层文件对象（兼容FastAPI的UploadFile）
@@ -182,15 +184,15 @@ class COSService:
             logger.error(f"图片处理失败: {e}")
             actual_file.seek(0)
             return actual_file.read()
-    
+
     def upload_file(self, file, folder: Optional[str] = None) -> Dict[str, Any]:
         """
         上传文件到COS
-        
+
         Args:
             file: 上传的文件对象
             folder: 目标文件夹（可选）
-            
+
         Returns:
             上传结果字典
         """
@@ -203,14 +205,14 @@ class COSService:
                     'error': validation_result['error'],
                     'code': 'INVALID_FILE'
                 }
-            
+
             # 获取文件信息
             original_filename = getattr(file, 'filename', None) or getattr(file, 'name', None) or 'unknown.jpg'
             file_size = validation_result['file_size']
-            
+
             # 生成新文件名
             new_filename = self.generate_filename(original_filename)
-            
+
             # 处理文件内容
             if validation_result['is_image']:
                 file_content = self.process_image(file, new_filename)
@@ -218,11 +220,11 @@ class COSService:
                 actual_file = file.file if hasattr(file, 'file') else file
                 actual_file.seek(0)
                 file_content = actual_file.read()
-            
+
             # 构建远程路径
             upload_folder = folder or self.cos_config.get('upload_folder', 'uploads')
             remote_key = f"{upload_folder}/{new_filename}"
-            
+
             # 上传到COS
             # no-cache 确保每次请求都验证最新 header
             cache_control = "no-cache, max-age=0, must-revalidate"
@@ -244,16 +246,16 @@ class COSService:
                 ContentDisposition="inline",  # 明确告诉浏览器这是展示内容
                 CacheControl=cache_control  # 避免错误 header 缓存
             )
-            
+
             # 生成访问URL
             file_url = f"{self.cos_config['domain']}/{remote_key}"
-            
+
             # 计算文件MD5
             md5_hash = hashlib.md5(file_content).hexdigest()
-            
+
             # 记录日志
             logger.info(f"文件上传成功: {original_filename} -> {remote_key}")
-            
+
             return {
                 'success': True,
                 'data': {
@@ -268,7 +270,7 @@ class COSService:
                 'etag': response.get('ETag', ''),
                 'upload_time': datetime.now().isoformat()
             }
-            
+
         except (CosServiceError, CosClientError) as e:
             logger.error(f"COS上传失败: {e}")
             return {
@@ -283,7 +285,7 @@ class COSService:
                 'error': f"上传失败: {str(e)}",
                 'code': 'UPLOAD_ERROR'
             }
-    
+
     def delete_file(self, remote_key: str) -> Dict[str, Any]:
         """删除COS文件"""
         try:
@@ -291,20 +293,20 @@ class COSService:
                 Bucket=self.cos_config['bucket'],
                 Key=remote_key
             )
-            
+
             logger.info(f"文件删除成功: {remote_key}")
             return {
                 'success': True,
                 'message': '文件删除成功'
             }
-            
+
         except Exception as e:
             logger.error(f"文件删除失败: {e}")
             return {
                 'success': False,
                 'error': f"删除失败: {str(e)}"
             }
-    
+
     def get_file_info(self, remote_key: str) -> Dict[str, Any]:
         """获取文件信息"""
         try:
@@ -312,7 +314,7 @@ class COSService:
                 Bucket=self.cos_config['bucket'],
                 Key=remote_key
             )
-            
+
             return {
                 'success': True,
                 'data': {
@@ -323,7 +325,7 @@ class COSService:
                     'content_type': response.get('Content-Type', 'application/octet-stream')
                 }
             }
-            
+
         except Exception as e:
             logger.error(f"获取文件信息失败: {e}")
             return {
