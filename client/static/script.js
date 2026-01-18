@@ -24,7 +24,6 @@ class Carousel3D {
                 style_type: 'new_year_style',
                 title: '新年烟花',
                 desc: '专业新年烟花拍摄，打造完美人像效果',
-                badge: '热门',
                 icon: '🏢',
                 image: '/static/images/studio.jpg'
             },
@@ -33,7 +32,6 @@ class Carousel3D {
                 style_type: 'wide_format_instant_camera',
                 title: '宽幅拍立得',
                 desc: '双张拼接拍立得，即时生成精美照片',
-                badge: '快速',
                 icon: '⚡',
                 image: '/static/images/quick.jpg'
             },
@@ -42,7 +40,6 @@ class Carousel3D {
                 style_type: 'winter_four_frame_grid',
                 title: '冬季四宫格',
                 desc: '四张冬季人像拼接，沉浸式降雪氛围',
-                badge: '时尚',
                 icon: '🏙️',
                 image: '/static/images/street.jpg'
             },
@@ -51,7 +48,6 @@ class Carousel3D {
                 style_type: 'style4',
                 title: '雪地刻印',
                 desc: '俯视视角雪地照片，人物线条刻印与文字',
-                badge: '唯美',
                 icon: '🌲',
                 image: '/static/images/nature.jpg'
             },
@@ -60,7 +56,6 @@ class Carousel3D {
                 style_type: 'doodle_subject',
                 title: '卡通涂鸦',
                 desc: '手绘卡通风格叠加，混合媒体插画效果',
-                badge: '怀旧',
                 icon: '📻',
                 image: '/static/images/vintage.jpg'
             },
@@ -69,7 +64,6 @@ class Carousel3D {
                 style_type: 'selfie_living',
                 title: '客厅自拍',
                 desc: '全身自拍照，明亮现代客厅背景',
-                badge: '前卫',
                 icon: '🚀',
                 image: '/static/images/futuristic.jpg'
             }
@@ -112,12 +106,13 @@ class Carousel3D {
                                 ${effect.id === 'quick' ? '<span class="time-badge">3秒</span>' : ''}
                             </div>
                         </div>
+                         ${effect.badge ? `<div class="card-badge">${effect.badge}</div>` : ''}
                         <div class="card-content">
                             <div>
                                 <h3 class="card-title">${effect.title}</h3>
                                 <p class="card-desc">${effect.desc}</p>
                             </div>
-                            ${effect.badge ? `<div class="card-badge">${effect.badge}</div>` : ''}
+
                         </div>
                     </div>
                 </div>
