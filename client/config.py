@@ -40,4 +40,4 @@ class Config:
     APP_PORT = 8005
 
     # 任务超时配置
-    TASK_TIMEOUT = 120  # 秒
+    TASK_TIMEOUT = 180  # 秒
