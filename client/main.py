@@ -26,6 +26,14 @@ app = FastAPI(
     version="2.0.0"
 )
 
+# 添加允许摄像头访问的中间件
+@app.middleware("http")
+async def add_camera_permission_headers(request: Request, call_next):
+    response = await call_next(request)
+    # 添加允许摄像头访问的响应头
+    response.headers["Permissions-Policy"] = "camera=(self), microphone=(self)"
+    return response
+
 # 挂载静态文件和模板
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")

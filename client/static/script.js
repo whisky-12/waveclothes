@@ -62,8 +62,8 @@ class Carousel3D {
             {
                 id: 'futuristic',
                 style_type: 'selfie_living',
-                title: '客厅自拍',
-                desc: '全身自拍照，明亮现代客厅背景',
+                title: '一键换装',
+                desc: '全身自拍照，一键换装体验',
                 icon: '🚀',
                 image: '/static/images/futuristic.jpg'
             }
