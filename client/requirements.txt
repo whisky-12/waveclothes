@@ -7,3 +7,7 @@ python-dotenv==1.0.0
 cos-python-sdk-v5==1.9.28
 Pillow==12.1.0
 aiofiles==24.1.0
+mediapipe==0.10.21
+opencv-python==4.9.0.80
+aiohttp==3.9.3
+numpy==1.26.4
