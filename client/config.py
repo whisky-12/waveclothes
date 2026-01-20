@@ -37,7 +37,7 @@ class Config:
 
     # FastAPI配置
     APP_HOST = os.getenv('APP_HOST', 'localhost')
-    APP_PORT = 8000
+    APP_PORT = 8005
 
     # 任务超时配置
     TASK_TIMEOUT = 120  # 秒
